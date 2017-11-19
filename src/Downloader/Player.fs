@@ -2,6 +2,7 @@
 open Scraper
 
 let rec displayList choice choices =
+    // Traverses a list of results incrementing the associated number every call, printing each result with its associated number
     match choices with
     | [] -> printfn "-"
     | [(name, _)] -> printfn "%i. %s" choice name
@@ -12,12 +13,14 @@ let rec displayList choice choices =
     end
 
 let rec findUrl n (songs: (string * string) list) choice  =
-        match songs with
-        | [] -> None
-        | [(_, url)] -> if n = choice then Some(url) else None
-        | (_, url) :: tl -> if n = choice then Some(url) else findUrl (n + 1) tl choice
+    // Looks up the url of a search result's associated number
+    match songs with
+    | [] -> None
+    | [(_, url)] -> if n = choice then Some(url) else None
+    | (_, url) :: tl -> if n = choice then Some(url) else findUrl (n + 1) tl choice
 
 let exec (cmdString: string) =
+    // Creates and executes a System.Diagnostics.Process with given args
     let args = cmdString.Split [|' '|]
     let executableProcess = new System.Diagnostics.Process()
     let startInfo = System.Diagnostics.ProcessStartInfo()
@@ -31,6 +34,7 @@ let exec (cmdString: string) =
     executableProcess.StandardOutput.ReadToEnd()
 
 let downloadSong song =
+    // Downloads, plays and deletes a song given a url
     exec ("youtube-dl --extract-audio --audio-format mp3 --output \"song.%(ext)s\" \"" + song + "\"") |> ignore
     //let dlCode = 
     //    exec ("youtube-dl -F " + song)
@@ -48,6 +52,7 @@ let downloadSong song =
 
 [<EntryPoint>]
 let main argv =
+    // Gets search results from arguments and allows the user to choose one, then continues to look up its url and plays the url if it exists
     let args = argv.[1..] |> String.concat " "
     let results = Scraper.search args |> Seq.toList
     results
