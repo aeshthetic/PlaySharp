@@ -1,0 +1,6 @@
+.paket
+packages
+paket-files
+paket.exe
+*/bin
+*/obj
