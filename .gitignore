@@ -2,5 +2,5 @@
 packages
 paket-files
 paket.exe
-*/bin
-*/obj
+src/*/bin
+src/*/obj
