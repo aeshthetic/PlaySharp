@@ -16,8 +16,8 @@ let rec findUrl n (songs: (string * string) list) choice  =
     // Looks up the url of a search result's associated number
     match songs with
     | [] -> None
-    | [(_, url)] -> if n = choice then Some(url) else None
-    | (_, url) :: tl -> if n = choice then Some(url) else findUrl (n + 1) tl choice
+    | [(name, url)] -> if n = choice then Some((name, url)) else None
+    | (name, url) :: tl -> if n = choice then Some((name, url)) else findUrl (n + 1) tl choice
 
 let exec (cmdString: string) =
     // Creates and executes a System.Diagnostics.Process with given args
@@ -33,28 +33,28 @@ let exec (cmdString: string) =
     executableProcess.Start() |> ignore
     executableProcess.StandardOutput.ReadToEnd()
 
-let downloadSong song =
+let rec downloadSong played autoLimit songInfo =
     // Downloads, plays and deletes a song given a url
-    exec ("youtube-dl --extract-audio --audio-format mp3 --output \"song.%(ext)s\" \"" + song + "\"") |> ignore
-    //let dlCode = 
-    //    exec ("youtube-dl -F " + song)
-    //    |> (fun table -> table.Split [|'\n'|])
-    //    |> Array.toSeq
-    //    |> Seq.filter (fun row -> row.Contains("audio only"))
-    //    |> Seq.map (fun row -> row.Split [|' '|])
-    //    |> Seq.item 0
-    //    |> Array.item 0
-    //
-    //exec (sprintf "youtube-dl -f %s %s" dlCode song) |> ignore
-    exec "cvlc --play-and-exit song.mp3" |> ignore
-    exec "rm song.mp3" |> ignore
-    0
+    if played = autoLimit then
+        0
+    else
+        exec ("youtube-dl --extract-audio --audio-format mp3 --output \"/tmp/PlaySharp/song.%(ext)s\" \"" + (songInfo |> snd) + "\"") |> ignore
+        songInfo
+        |> fst
+        |> sprintf "cvlc --play-and-exit /tmp/PlaySharp/%s.mp3"
+        |> exec
+        |> ignore
+        downloadSong (played+1) autoLimit (songInfo |> snd |> findNext)
 
 [<EntryPoint>]
 let main argv =
+    if System.IO.Directory.Exists @"/tmp/PlaySharp" then
+        System.IO.Directory.Delete(@"/tmp/PlaySharp") |> ignore
+    System.IO.Directory.CreateDirectory(@"/tmp/PlaySharp") |> ignore
     // Gets search results from arguments and allows the user to choose one, then continues to look up its url and plays the url if it exists
-    let args = argv.[1..] |> String.concat " "
-    let results = Scraper.search args |> Seq.toList
+    printf "Search for a song: "
+    let searchTerm = Console.ReadLine()
+    let results = Scraper.search searchTerm |> Seq.toList
     results
     |> displayList 1
     printf "Your choice: "
@@ -63,6 +63,11 @@ let main argv =
         |> Int32.Parse
         |> findUrl 1 results
 
+    printf "How many songs should play before stopping? "
+    let limit =
+        Console.ReadLine()
+        |> Int32.Parse
+
     match songUrl with
-    | Some(url) -> downloadSong url
+    | Some(songInfo) -> downloadSong 0 limit songInfo
     | None -> 1
