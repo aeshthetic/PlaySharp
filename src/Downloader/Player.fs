@@ -38,7 +38,7 @@ let rec downloadSong played autoLimit songInfo =
     if played = autoLimit then
         0
     else
-        exec ("youtube-dl --extract-audio --audio-format mp3 --output \"/tmp/PlaySharp/song.%(ext)s\" \"" + (songInfo |> snd) + "\"") |> ignore
+        exec ("youtube-dl --extract-audio --audio-format mp3 --output \"/tmp/PlaySharp/"+(songInfo |> fst)+".%(ext)s\" \"" + (songInfo |> snd) + "\"") |> ignore
         songInfo
         |> fst
         |> sprintf "cvlc --play-and-exit /tmp/PlaySharp/%s.mp3"
@@ -48,9 +48,8 @@ let rec downloadSong played autoLimit songInfo =
 
 [<EntryPoint>]
 let main argv =
-    if System.IO.Directory.Exists @"/tmp/PlaySharp" then
-        System.IO.Directory.Delete(@"/tmp/PlaySharp") |> ignore
-    System.IO.Directory.CreateDirectory(@"/tmp/PlaySharp") |> ignore
+    if not (System.IO.Directory.Exists @"/tmp/PlaySharp") then
+        System.IO.Directory.CreateDirectory(@"/tmp/PlaySharp") |> ignore
     // Gets search results from arguments and allows the user to choose one, then continues to look up its url and plays the url if it exists
     printf "Search for a song: "
     let searchTerm = Console.ReadLine()
