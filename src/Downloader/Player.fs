@@ -1,23 +1,26 @@
 ﻿open System
 open Scraper
+open FSharp.Data
 
-let rec displayList choice choices =
+type Config = JsonProvider<"config.json">
+let config = Config.Load("config.json")
+let rec displayList choice (choices: Song list) =
     // Traverses a list of results incrementing the associated number every call, printing each result with its associated number
     match choices with
     | [] -> printfn "-"
-    | [(name, _)] -> printfn "%i. %s" choice name
-    | (name, _) :: tail ->
+    | [{name = songName}] -> printfn "%i. %s" choice songName
+    | {name = songName} :: tail ->
     begin
-        printfn "%i. %s" choice name;
+        printfn "%i. %s" choice songName;
         displayList (choice + 1) tail
     end
 
-let rec findUrl n (songs: (string * string) list) choice  =
+let rec findUrl n (songs: Song list) choice  =
     // Looks up the url of a search result's associated number
     match songs with
     | [] -> None
-    | [(name, url)] -> if n = choice then Some((name, url)) else None
-    | (name, url) :: tl -> if n = choice then Some((name, url)) else findUrl (n + 1) tl choice
+    | [{name = songName; url = link; duration = timeSpan}] -> if n = choice then Some({name = songName; url = link; duration = timeSpan}) else None
+    | {name = songName; url = link; duration = timeSpan} :: tl -> if n = choice then Some({name = songName; url = link; duration = timeSpan}) else findUrl (n + 1) tl choice
 
 let exec (cmdString: string) =
     // Creates and executes a System.Diagnostics.Process with given args
@@ -33,40 +36,50 @@ let exec (cmdString: string) =
     executableProcess.Start() |> ignore
     executableProcess.StandardOutput.ReadToEnd()
 
-let rec downloadSong played autoLimit songInfo =
-    // Downloads, plays and deletes a song given a url
-    if played = autoLimit then
+
+let rec playOnline played autoLimit (initialSong: Song) =
+    // Recursively downloads and plays a song (and suggested songs) until $autoLimit songs have been played
+    let ffmpegBin = config.FfmpegBinary
+    if played >= autoLimit then
         0
     else
-        exec ("youtube-dl --extract-audio --audio-format mp3 --output \"/tmp/PlaySharp/"+(songInfo |> fst)+".%(ext)s\" \"" + (songInfo |> snd) + "\"") |> ignore
-        songInfo
-        |> fst
-        |> sprintf "cvlc --play-and-exit /tmp/PlaySharp/%s.mp3"
+        printfn "Downloading and playing %s..." (initialSong.name)
+        exec ("youtube-dl --extract-audio --audio-format vorbis --output \""+config.DownloadPath+(initialSong.name |> removeSpaces)+".%(ext)s\" \"" + initialSong.url + "\"") |> ignore
+        exec (sprintf "%s -loglevel quiet -i %s -acodec libmp3lame %s.mp3" ffmpegBin (sprintf "%s%s.ogg" config.DownloadPath (initialSong.name |> removeSpaces)) (config.DownloadPath + (initialSong.name |> removeSpaces))) |> ignore
+        initialSong.name
+        |> removeSpaces
+        |> sprintf "vlc --play-and-exit %s%s.mp3" config.DownloadPath
         |> exec
         |> ignore
-        downloadSong (played+1) autoLimit (songInfo |> snd |> findNext)
+        playOnline (played + initialSong.duration) autoLimit (initialSong |> findNext)
 
 [<EntryPoint>]
 let main argv =
-    if not (System.IO.Directory.Exists @"/tmp/PlaySharp") then
-        System.IO.Directory.CreateDirectory(@"/tmp/PlaySharp") |> ignore
+    if not (System.IO.Directory.Exists config.DownloadPath) then
+        System.IO.Directory.CreateDirectory(config.DownloadPath) |> ignore
     // Gets search results from arguments and allows the user to choose one, then continues to look up its url and plays the url if it exists
-    printf "Search for a song: "
-    let searchTerm = Console.ReadLine()
+    let searchTerm = 
+        match config.FirstSearch with
+        | "BLANK" -> 
+        begin
+            printfn "Choose a song: "
+            Console.ReadLine()
+        end
+        | value -> value
+
     let results = Scraper.search searchTerm |> Seq.toList
     results
     |> displayList 1
     printf "Your choice: "
-    let songUrl = 
+    let song = 
         Console.ReadLine()
         |> Int32.Parse
         |> findUrl 1 results
 
-    printf "How many songs should play before stopping? "
+    printf "How long should music play? (HH:MM:SS) "
     let limit =
-        Console.ReadLine()
-        |> Int32.Parse
+        Console.ReadLine() |> TimeSpan.Parse
 
-    match songUrl with
-    | Some(songInfo) -> downloadSong 0 limit songInfo
+    match song with
+    | Some(initialSong) -> playOnline ("00:00:00" |> TimeSpan.Parse) limit initialSong
     | None -> 1
