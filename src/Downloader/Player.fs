@@ -19,8 +19,10 @@ let rec findUrl n (songs: Song list) choice  =
     // Looks up the url of a search result's associated number
     match songs with
     | [] -> None
-    | [{name = songName; url = link; duration = timeSpan}] -> if n = choice then Some({name = songName; url = link; duration = timeSpan}) else None
-    | {name = songName; url = link; duration = timeSpan} :: tl -> if n = choice then Some({name = songName; url = link; duration = timeSpan}) else findUrl (n + 1) tl choice
+    | [{name = songName; url = link; duration = timeSpan}] ->
+        if n = choice then Some({name = songName; url = link; duration = timeSpan}) else None
+    | {name = songName; url = link; duration = timeSpan} :: tl ->
+        if n = choice then Some({name = songName; url = link; duration = timeSpan}) else findUrl (n + 1) tl choice
 
 let exec (cmdString: string) =
     // Creates and executes a System.Diagnostics.Process with given args
@@ -36,6 +38,14 @@ let exec (cmdString: string) =
     executableProcess.Start() |> ignore
     executableProcess.StandardOutput.ReadToEnd()
 
+let downloadPlay ffmpegBin song =
+    exec ("youtube-dl --extract-audio --audio-format vorbis --output \""+config.DownloadPath+(song.name |> removeSpaces)+".%(ext)s\" \"" + song.url + "\"") |> ignore
+    exec (sprintf "%s -loglevel quiet -i %s -acodec libmp3lame %s.mp3" ffmpegBin (sprintf "%s%s.ogg" config.DownloadPath (song.name |> removeSpaces)) (config.DownloadPath + (song.name |> removeSpaces))) |> ignore
+    song.name
+    |> removeSpaces
+    |> sprintf "vlc --play-and-exit %s%s.mp3" config.DownloadPath
+    |> exec
+    |> ignore
 
 let rec playOnline played autoLimit (initialSong: Song) =
     // Recursively downloads and plays a song (and suggested songs) until $autoLimit songs have been played
@@ -44,20 +54,48 @@ let rec playOnline played autoLimit (initialSong: Song) =
         0
     else
         printfn "Downloading and playing %s..." (initialSong.name)
-        exec ("youtube-dl --extract-audio --audio-format vorbis --output \""+config.DownloadPath+(initialSong.name |> removeSpaces)+".%(ext)s\" \"" + initialSong.url + "\"") |> ignore
-        exec (sprintf "%s -loglevel quiet -i %s -acodec libmp3lame %s.mp3" ffmpegBin (sprintf "%s%s.ogg" config.DownloadPath (initialSong.name |> removeSpaces)) (config.DownloadPath + (initialSong.name |> removeSpaces))) |> ignore
-        initialSong.name
-        |> removeSpaces
-        |> sprintf "vlc --play-and-exit %s%s.mp3" config.DownloadPath
-        |> exec
-        |> ignore
+        downloadPlay ffmpegBin initialSong
         playOnline (played + initialSong.duration) autoLimit (initialSong |> findNext)
 
-[<EntryPoint>]
-let main argv =
-    if not (System.IO.Directory.Exists config.DownloadPath) then
-        System.IO.Directory.CreateDirectory(config.DownloadPath) |> ignore
-    // Gets search results from arguments and allows the user to choose one, then continues to look up its url and plays the url if it exists
+let rec playList played limit songs =
+    let ffmpegBin = config.FfmpegBinary
+    if played >= limit then
+        0
+    else
+        match songs with
+        | [] -> 0
+        | [song] -> 
+            downloadPlay ffmpegBin song
+            0
+        | song :: rest ->
+            downloadPlay ffmpegBin song
+            playList (played + song.duration) limit rest
+
+let rec makeList duration max songs =
+    if duration <= max then
+        printf "Search for a song: "
+        let keyword = Console.ReadLine()
+        let results = Scraper.search keyword |> Seq.toList
+        results
+        |> displayList 1
+        printfn "Your choice: "
+        let song =
+            Console.ReadLine()
+            |> Int32.Parse
+            |> findUrl 1 results
+        match song with
+        | Some(songItem) -> makeList (songItem.duration + duration) max (songItem :: songs)
+        | None -> songs
+    else
+        songs
+let manualPlay () =
+    printf "How long should music play? (HH:MM:SS) "
+    let duration = Console.ReadLine() |> TimeSpan.Parse
+    makeList ("00:00:00" |> TimeSpan.Parse) duration []
+    |> List.rev
+    |> playList ("00:00:00" |> TimeSpan.Parse) duration
+       
+let autoPlay () =
     let searchTerm = 
         match config.FirstSearch with
         | "BLANK" -> 
@@ -81,5 +119,22 @@ let main argv =
         Console.ReadLine() |> TimeSpan.Parse
 
     match song with
-    | Some(initialSong) -> playOnline ("00:00:00" |> TimeSpan.Parse) limit initialSong
+    | Some(songItem) -> playOnline ("00:00:00" |> TimeSpan.Parse) limit songItem
     | None -> 1
+
+[<EntryPoint>]
+let main argv =
+    if not (System.IO.Directory.Exists config.DownloadPath) then
+        System.IO.Directory.CreateDirectory(config.DownloadPath) |> ignore
+    // Gets search results from arguments and allows the user to choose one, then continues to look up its url and plays the url if it exists
+    match (argv |> Array.toList) with
+    | [] ->
+        match config.ModeDefault with
+        | "autoplay" -> autoPlay ()
+        | "manual" -> manualPlay ()
+        | _ -> 1
+    | _ :: mode :: _ ->
+        match mode with
+        | "autoplay" -> autoPlay ()
+        | "manual" -> manualPlay ()
+        | _ -> 1

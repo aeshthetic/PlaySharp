@@ -2,5 +2,6 @@
     "ffmpeg_binary" : "ffmpeg2.8",
     "download_path" : "/tmp/PlaySharp/",
     "first_search" : "NONE",
-    "play_forever" : false
+    "play_forever" : false,
+    "mode_default" : "autoplay"
 }
