@@ -1,4 +1,5 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp2.0</TargetFramework>
@@ -12,6 +13,8 @@
     <ProjectReference Include="..\Scraper\Scraper.fsproj" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="Argu" Version="3.7.0" />
     <PackageReference Include="FSharp.Data" Version="2.4.2" />
   </ItemGroup>
+  <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>
