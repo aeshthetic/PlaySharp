@@ -1,6 +1,17 @@
+# F memes
 .paket
 packages
 paket-files
 paket.exe
 src/*/bin
 src/*/obj
+
+# Vim memes
+*~
+
+# errpell serious stuff
+*.priv
+priv.*
+
+# Travis apparently needs this
+!projects.assets.json
