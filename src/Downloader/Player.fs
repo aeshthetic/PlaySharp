@@ -140,7 +140,7 @@ let main argv =
     let config =
         match args.TryGetResult <@ ConfigPath @> with
         | Some (path) -> Config.Load(path)
-        | None -> Config.Load("config.json")
+        | None -> Config.Load(Environment.GetEnvironmentVariable("HOME") + "/.config/PlaySharp/config.json")
 
     let mode =
         match args.TryGetResult <@ PlayMode @> with
