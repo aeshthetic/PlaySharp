@@ -139,7 +139,7 @@ let main argv =
     let args = parser.Parse argv
     let config =
         match args.TryGetResult <@ ConfigPath @> with
-        | Some (path) -> Config.Load(path)
+        | Some (path) -> Config.Load(IO.Path.GetFullPath(path))
         | None -> Config.Load(Environment.GetEnvironmentVariable("HOME") + "/.config/PlaySharp/config.json")
 
     let mode =
